@@ -1,0 +1,22 @@
+{
+    "name": "sue/reactphp-coroutine",
+    "description": "reactphp coroutine",
+    "type": "library",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "heroest",
+            "email": "kakashi@live.cn"
+        }
+    ],
+    "minimum-stability": "dev",
+    "require": {},
+    "autoload": {
+        "psr-4": {
+            "Sue\\Coroutine\\": "src/"
+        },
+        "files": [
+            "src/functions.php"
+        ]
+    }
+}
