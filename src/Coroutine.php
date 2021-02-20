@@ -14,12 +14,11 @@ class Coroutine
     private $generator;
     /** @var Deferred $deferred */
     private $deferred;
-    /** @var bool $isFinished */
-    private $isFinished = false;
+    /** @var bool $isDone */
+    private $isDone = false;
     private $state;
     /** @var \React\Promise\CancellablePromiseInterface $progress */
     private $progress;
-    private $parent;
     private $child;
     private $timeExpired = 0;
 
@@ -28,15 +27,21 @@ class Coroutine
         $this->id = md5(spl_object_hash($this));
     }
 
+    public function getId(): string
+    {
+        return $this->id;
+    }
+
     public function start(Generator $generator): self
     {
+        $this->state = state::WORKING;
         $this->deferred = new Deferred(function () {
             $schedule = CoroutineScheduler::getInstance();
             $schedule->cancelCoroutine($this);
         });
         $this->generator = $generator;
         $this->timeExpired = 0;
-        $this->isFinished = false;
+        $this->isDone = false;
         return $this;
     }
 
@@ -50,6 +55,11 @@ class Coroutine
         return $this->state === $state;
     }
 
+    public function isDone(): bool
+    {
+        return $this->isDone;
+    }
+
     public function isTimeout(): bool
     {
         return $this->timeExpired and microtime(true) > $this->timeExpired;
@@ -57,7 +67,7 @@ class Coroutine
 
     public function setTimeout(float $timeout): void
     {
-        $this->timeExpired = (float) bcadd(microtime(true), $timeout < 0 ? 0 : (float) $timeout, 4);
+        $this->timeExpired = (float) bcadd(microtime(true), $timeout, 4);
     }
 
     public function child(): ?Coroutine
@@ -65,14 +75,24 @@ class Coroutine
         return $this->child;
     }
 
+    public function setChild(Coroutine $child): self
+    {
+        $this->child = $child;
+        /** @var \React\Promise\ExtendedPromiseInterface $promise */
+        $promise = $child->promise();
+        $promise->always(function () {
+            $this->child = null;
+        });
+        return $this;
+    }
+
     public function get()
     {
         if ($this->generator->valid()) {
             return $this->generator->current();
         } else {
-            $this->coroutine->next();
-            $return = $this->coroutine->getReturn();
-            $this->settle($return);
+            $this->generator->next();
+            $this->settle($this->generator->getReturn());
         }
     }
 
@@ -81,37 +101,48 @@ class Coroutine
         if ($this->valid()) {
             try {
                 ($value instanceof Throwable)
-                    ? $this->coroutine->throw($value)
-                    : $this->coroutine->send($value);
+                    ? $this->generator->throw($value)
+                    : $this->generator->send($value);
             } catch (Throwable $e) {
                 $this->settle($e);
             }
+        } else {
+            $this->settle($value);
         }
     }
 
-    public function cancel(string $reason)
+    public function appendProgress(PromiseInterface $promise)
     {
-        if (null !== $this->progress) {
+        $this->progress = $promise;
+        $this->state = State::PROGRESS;
+        /** @var \React\Promise\ExtendedPromiseInterface $promise */
+        $promise->always(function () {
+            $this->progress = null;
+            $this->state = State::WORKING;
+        });
+    }
+
+    public function cancel(Throwable $reason = null)
+    {
+        if ($reason) $this->settle($reason);
+
+        if ($this->progress) {
             $this->progress->cancel();
             $this->progress = null;
         }
-        $this->settle(new CoroutineException("Coroutine has been cancelled due to {$reason}"));
     }
 
     public function valid(): bool
     {
-        return false === $this->isFinished
+        return false === $this->isDone
             and null !== $this->generator
             and $this->generator->valid();
     }
 
-    public function reset()
-    {
-    }
-
     public function settle($value)
     {
-        $this->isFinished = true;
+        $this->isDone = true;
+        $this->state = State::IDLE;
         ($value instanceof Throwable)
             ? $this->deferred->reject($value)
             : $this->deferred->resolve($value);

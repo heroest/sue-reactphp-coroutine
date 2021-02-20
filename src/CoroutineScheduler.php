@@ -3,20 +3,17 @@
 namespace Sue\Coroutine;
 
 use Throwable;
-use SplStack;
 use SplObjectStorage;
 use Generator;
-use Sue\Coroutine\{AbstractSystemCall, CoroutineException, State};
+use Sue\Coroutine\{CoroutineException, State, SystemCall\AbstractSystemCall};
 use React\EventLoop\LoopInterface;
-use React\Promise\{Deferred, PromiseInterface};
+use React\Promise\PromiseInterface;
 use function React\Promise\{resolve, reject};
 
 final class CoroutineScheduler
 {
     private static $instance;
-    private $coroutineStack;
     private $coroutineWorking;
-    private $poolSize = 0;
     /** @var \React\EventLoop\LoopInterface $loop */
     private $loop;
     /** @var \React\EventLoop\TimerInterface */
@@ -24,7 +21,6 @@ final class CoroutineScheduler
 
     private function __construct()
     {
-        $this->coroutineStack = new SplStack();
         $this->coroutineWorking = new SplObjectStorage();
     }
 
@@ -33,7 +29,7 @@ final class CoroutineScheduler
         return self::$instance ?? self::$instance = new self();
     }
 
-    public function bindEventLoop(LoopInterface $loop): self
+    public function registerLoop(LoopInterface $loop): self
     {
         if (null !== $this->loop) {
             throw new CoroutineException('CoroutineScheduler has already been bind to eventloop');
@@ -42,10 +38,9 @@ final class CoroutineScheduler
         return $this;
     }
 
-    public function setPoolSize(int $pool_size): self
+    public function getLoop(): LoopInterface
     {
-        $this->poolSize = ($pool_size <= 0) ? 0 : $pool_size;
-        return $this;
+        return $this->loop;
     }
 
     public function tick($timer)
@@ -54,11 +49,9 @@ final class CoroutineScheduler
             $this->loop->cancelTimer($timer);
             $this->tickTimer = null;
             return;
-        } else {
-            $this->tickTimer ?? $this->tickTimer = $timer;
-            $this->coroutineWorking->rewind();
         }
-        
+
+        $this->coroutineWorking->rewind();
         while ($count--) {
             /** @var \Sue\Coroutine\Coroutine $coroutine */
             if (null === $coroutine = $this->coroutineWorking->current()) {
@@ -66,10 +59,10 @@ final class CoroutineScheduler
             }
 
             $this->coroutineWorking->next();
-            if (!$coroutine->valid()) {
-                $this->recycleCoroutine($coroutine);
+            if ($coroutine->inState(State::IDLE)) {
+                $this->closeCoroutine($coroutine);
             } elseif ($coroutine->isTimeout()) {
-                $this->recycleCoroutine($coroutine, 'coroutine timeout');
+                $this->closeCoroutine($coroutine, new CoroutineException('Coroutine is timeout'));
             } elseif ($coroutine->inState(State::PROGRESS)) {
                 continue;
             } else {
@@ -84,10 +77,9 @@ final class CoroutineScheduler
         try {
             $result = call_user_func_array($callable, $params);
             if ($result instanceof Generator) {
-                $coroutine = $this->createCoroutine();
-                $coroutine->start($result);
+                $coroutine = $this->createCoroutine($result);
                 $this->coroutineWorking->attach($coroutine);
-                $this->tickTimer = $this->tickTimer ?? $this->loop->addPeriodicTimer(0, [$this, 'tick']);
+                $this->tickTimer ?? $this->tickTimer = $this->loop->addPeriodicTimer(0, [$this, 'tick']);
                 return $coroutine->promise();
             } else {
                 return resolve($result);
@@ -99,63 +91,65 @@ final class CoroutineScheduler
 
     public function cancelCoroutine(Coroutine $coroutine)
     {
-        $this->recycleCoroutine($coroutine, 'coroutine cancelled');
+        $this->closeCoroutine($coroutine, new CoroutineException('Coroutine is canncelled'));
     }
 
     private function handleYielded(Coroutine $coroutine, $value)
     {
-        if (!$coroutine->valid()) {
-            $this->recycleCoroutine($coroutine);
-            return;
-        }
-
         if ($value instanceof PromiseInterface) {
             $this->handlePromise($coroutine, $value);
         } elseif ($value instanceof Generator) {
             $this->handleGenerator($coroutine, $value);
         } elseif ($value instanceof AbstractSystemCall) {
             $this->handleYielded($coroutine, $value->execute($coroutine));
-        } else {
+        } elseif ($this->isArray($value)) {
+            //todo
+        } elseif (is_array($value)) {
             $coroutine->set($value);
         }
     }
 
     private function handlePromise(Coroutine $coroutine, PromiseInterface $promise)
     {
-
+        $coroutine->appendProgress($promise);
+        $closure = function ($value) use ($coroutine) {
+            $coroutine->set($value);
+        };
+        $promise->then($closure, $closure);
     }
 
-    private function handleGenerator(Coroutine $coroutine, Generator $generator)
+    private function handleGenerator(Coroutine $parent, Generator $generator)
     {
-
+        $child = $this->createCoroutine($generator);
+        $parent->setChild($child);
+        $this->handlePromise($parent, $child->promise());
+        $this->coroutineWorking->attach($child);
     }
 
-    private function createCoroutine(): Coroutine
+    private function createCoroutine(Generator $generator): Coroutine
     {
-        return $this->coroutineStack->valid()
-                ? $this->coroutineStack->pop()
-                : new Coroutine();
+        return (new Coroutine())->start($generator);
     }
 
-    private function recycleCoroutine(Coroutine $coroutine, string $reason = 'coroutine recycled')
+    private function closeCoroutine(Coroutine $coroutine, Throwable $reason = null)
     {
-        if (null !== $child = $coroutine->child()) {
-            $this->recycleCoroutine($child, 'parent coroutine recycled');
-        }
-
         if ($coroutine->valid()) {
             $coroutine->cancel($reason);
         }
-        $this->coroutineWorking->detach($coroutine);
-
-        if ($this->needRecycle()) {
-            $coroutine->reset();
-            $this->coroutineStack->push($coroutine);
+        
+        if (null !== $child = $coroutine->child()) {
+            $this->closeCoroutine($child);
         }
+
+        $this->coroutineWorking->detach($coroutine);
     }
 
-    private function needRecycle(): bool
+    private function isArray($value): bool
     {
-        return $this->poolSize and $this->poolSize > $this->coroutineStack->count();
+        if (empty($value) or !is_array($value)) {
+            return false;
+        } else {
+            return array_keys($value) === range(0, count($value) - 1);
+        }
     }
 }

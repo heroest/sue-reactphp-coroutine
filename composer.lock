@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "6d1f1b8f9f2e2510688e6cd51a7fe7e0",
+    "content-hash": "3bf15d7083ad3d1134a685114147a874",
     "packages": [
         {
             "name": "react/event-loop",

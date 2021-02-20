@@ -9,14 +9,18 @@
             "email": "kakashi@live.cn"
         }
     ],
-    "minimum-stability": "dev",
-    "require": {},
+    "minimum-stability": "stable",
     "autoload": {
         "psr-4": {
             "Sue\\Coroutine\\": "src/"
         },
         "files": [
-            "src/functions.php"
+            "src/function_include.php"
         ]
+    },
+    "require": {
+        "react/event-loop": "^1.1",
+        "react/promise": "^2.8",
+        "react/promise-timer": "^1.6"
     }
 }

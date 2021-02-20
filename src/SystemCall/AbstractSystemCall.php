@@ -1,6 +1,6 @@
 <?php
 
-namespace Sue\Coroutine;
+namespace Sue\Coroutine\SystemCall;
 
 use Sue\Coroutine\Coroutine;
 
