@@ -3,7 +3,7 @@
 include 'vendor/autoload.php';
 
 $loop = \React\EventLoop\Factory::create();
-\Sue\Coroutine\CoroutineScheduler::getInstance()->registerLoop($loop);
+\Sue\Coroutine\bindLoop($loop);
 
 $deferred = new \React\Promise\Deferred();
 
@@ -24,7 +24,6 @@ function child() {
 function grandson()
 {
     yield 3;
-    throw new \Exception('grandson problem');
     return 'grandson-done';
 }
 
@@ -36,6 +35,7 @@ function fastresult()
 
 $loop->futureTick(function () use ($deferred, $never) {    
     \Sue\Coroutine\co(function ($promise, $never) {
+        yield \Sue\Coroutine\SystemCall\timeout(0.1);
         $result = yield [
             child(),
             child(),
@@ -46,7 +46,10 @@ $loop->futureTick(function () use ($deferred, $never) {
         foreach ($result as $value) {
             echo $value . "\r\n";
         }
-    }, $deferred->promise(), $never);
+    }, $deferred->promise(), $never)
+    ->otherwise(function ($error) {
+        echo $error;
+    });
 });
 
 $loop->addTimer(3, function () use ($deferred) {

@@ -38,8 +38,8 @@ class Coroutine
     {
         $this->state = state::WORKING;
         $this->deferred = new Deferred(function () {
-            $schedule = CoroutineScheduler::getInstance();
-            $schedule->cancelCoroutine($this);
+            CoroutineScheduler::getInstance()
+                ->cancelCoroutine($this);
         });
         $this->generator = $generator;
         $this->timeExpired = 0;

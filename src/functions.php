@@ -2,9 +2,16 @@
 
 namespace Sue\Coroutine
 {
+    function bindLoop(\React\EventLoop\LoopInterface $loop)
+    {
+        \Sue\Coroutine\CoroutineScheduler::getInstance()
+            ->registerLoop($loop);
+    }
+
     function co(callable $callable, ...$params): \React\Promise\ExtendedPromiseInterface
     {
-        return \Sue\Coroutine\CoroutineScheduler::getInstance()->execute($callable, ...$params);
+        return \Sue\Coroutine\CoroutineScheduler::getInstance()
+            ->execute($callable, ...$params);
     }
 }
 

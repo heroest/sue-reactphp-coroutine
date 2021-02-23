@@ -75,6 +75,10 @@ final class CoroutineScheduler
     public function execute(callable $callable, ...$params): PromiseInterface
     {
         try {
+            if (null === $this->loop) {
+                throw new CoroutineException("Eventloop is not registered, maybe forget to call \Coroutine\bindLoop() before execute?");
+            }
+
             $result = call_user_func_array($callable, $params);
             if ($result instanceof Generator) {
                 $coroutine = $this->createCoroutine($result);
@@ -179,20 +183,9 @@ final class CoroutineScheduler
         $result = [];
         $todo_count = count($promises);
         foreach ($promises as $index => $promise) {
-            $handler = function ($value) use ($promises, $index, $deferred, &$result, &$todo_count) {
+            $handler = function ($value) use ($index, $deferred, &$result, &$todo_count) {
                 $result[$index] = $value;
                 if (0 === --$todo_count) {
-                    $deferred->resolve($result);
-                } elseif ($value instanceof Throwable) {
-                    /** @var CancellablePromiseInterface $deferred_promise */
-                    $deferred_promise = $deferred->promise();
-                    $deferred_promise->cancel(); //trigger canceller on deferred
-
-                    foreach (array_keys($promises) as $i) {
-                        if (!array_key_exists($i, $result)) {
-                            $result[$i] = new CoroutineException("Awaitable is canncelled", 0, $value);
-                        }
-                    }
                     $deferred->resolve($result);
                 }
             };
