@@ -76,7 +76,7 @@ final class CoroutineScheduler
     {
         try {
             if (null === $this->loop) {
-                throw new CoroutineException("Eventloop is not registered, maybe forget to call \Coroutine\bindLoop() before execute?");
+                throw new CoroutineException("Eventloop is not registered, maybe forget to call \Sue\Coroutine\bindLoop() before execute?");
             }
 
             $result = call_user_func_array($callable, $params);
