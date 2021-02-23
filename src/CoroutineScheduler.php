@@ -7,7 +7,7 @@ use SplObjectStorage;
 use Generator;
 use Sue\Coroutine\{CoroutineException, State, SystemCall\AbstractSystemCall};
 use React\EventLoop\LoopInterface;
-use React\Promise\PromiseInterface;
+use React\Promise\{Deferred, PromiseInterface, CancellablePromiseInterface, CancellationQueue};
 use function React\Promise\{resolve, reject};
 
 final class CoroutineScheduler
@@ -59,7 +59,7 @@ final class CoroutineScheduler
             }
 
             $this->coroutineWorking->next();
-            if ($coroutine->inState(State::IDLE)) {
+            if ($coroutine->inState(State::DONE)) {
                 $this->closeCoroutine($coroutine);
             } elseif ($coroutine->isTimeout()) {
                 $this->closeCoroutine($coroutine, new CoroutineException('Coroutine is timeout'));
@@ -103,8 +103,8 @@ final class CoroutineScheduler
         } elseif ($value instanceof AbstractSystemCall) {
             $this->handleYielded($coroutine, $value->execute($coroutine));
         } elseif ($this->isArray($value)) {
-            //todo
-        } elseif (is_array($value)) {
+            $this->handleArray($coroutine, $value);
+        } else {
             $coroutine->set($value);
         }
     }
@@ -121,9 +121,27 @@ final class CoroutineScheduler
     private function handleGenerator(Coroutine $parent, Generator $generator)
     {
         $child = $this->createCoroutine($generator);
-        $parent->setChild($child);
+        $parent->appendChild($child);
         $this->handlePromise($parent, $child->promise());
         $this->coroutineWorking->attach($child);
+    }
+
+    private function handleArray(Coroutine $parent, array $items)
+    {
+        $promises = [];
+        foreach ($items as $item) {
+            if ($items instanceof PromiseInterface) {
+                $promises[] = $item;
+            } elseif ($item instanceof Generator) {
+                $child = $this->createCoroutine($item);
+                $parent->appendChild($child);
+                $this->coroutineWorking->attach($child);
+                $promises[] = $child->promise();
+            } else {
+                $promises[] = resolve($item);
+            }
+        }
+        $this->handlePromise($parent, $this->await($promises));
     }
 
     private function createCoroutine(Generator $generator): Coroutine
@@ -137,7 +155,7 @@ final class CoroutineScheduler
             $coroutine->cancel($reason);
         }
         
-        if (null !== $child = $coroutine->child()) {
+        foreach ($coroutine->children() as $child) {
             $this->closeCoroutine($child);
         }
 
@@ -151,5 +169,36 @@ final class CoroutineScheduler
         } else {
             return array_keys($value) === range(0, count($value) - 1);
         }
+    }
+
+    private function await(array $promises): PromiseInterface
+    {
+        $canceller = new CancellationQueue();
+        $deferred = new Deferred($canceller);
+
+        $result = [];
+        $todo_count = count($promises);
+        foreach ($promises as $index => $promise) {
+            $handler = function ($value) use ($promises, $index, $deferred, &$result, &$todo_count) {
+                $result[$index] = $value;
+                if (0 === --$todo_count) {
+                    $deferred->resolve($result);
+                } elseif ($value instanceof Throwable) {
+                    /** @var CancellablePromiseInterface $deferred_promise */
+                    $deferred_promise = $deferred->promise();
+                    $deferred_promise->cancel(); //trigger canceller on deferred
+
+                    foreach (array_keys($promises) as $i) {
+                        if (!array_key_exists($i, $result)) {
+                            $result[$i] = new CoroutineException("Awaitable is canncelled", 0, $value);
+                        }
+                    }
+                    $deferred->resolve($result);
+                }
+            };
+            $promise->then($handler, $handler);
+            $canceller->enqueue($promise);
+        }
+        return $deferred->promise();
     }
 }

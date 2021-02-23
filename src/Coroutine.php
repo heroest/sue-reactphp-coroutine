@@ -4,6 +4,7 @@ namespace Sue\Coroutine;
 
 use Throwable;
 use Generator;
+use SplObjectStorage;
 use Sue\Coroutine\{CoroutineException, CoroutineScheduler};
 use React\Promise\{Deferred, PromiseInterface};
 
@@ -19,12 +20,13 @@ class Coroutine
     private $state;
     /** @var \React\Promise\CancellablePromiseInterface $progress */
     private $progress;
-    private $child;
+    private $children;
     private $timeExpired = 0;
 
     public function __construct()
     {
         $this->id = md5(spl_object_hash($this));
+        $this->children = new SplObjectStorage();
     }
 
     public function getId(): string
@@ -70,18 +72,18 @@ class Coroutine
         $this->timeExpired = (float) bcadd(microtime(true), $timeout, 4);
     }
 
-    public function child(): ?Coroutine
+    public function children(): array
     {
-        return $this->child;
+        return iterator_to_array($this->children, false);
     }
 
-    public function setChild(Coroutine $child): self
+    public function appendChild(Coroutine $child): self
     {
-        $this->child = $child;
+        $this->children->attach($child);
         /** @var \React\Promise\ExtendedPromiseInterface $promise */
         $promise = $child->promise();
-        $promise->always(function () {
-            $this->child = null;
+        $promise->always(function () use ($child) {
+            $this->children->detach($child);
         });
         return $this;
     }
@@ -142,7 +144,7 @@ class Coroutine
     public function settle($value)
     {
         $this->isDone = true;
-        $this->state = State::IDLE;
+        $this->state = State::DONE;
         ($value instanceof Throwable)
             ? $this->deferred->reject($value)
             : $this->deferred->resolve($value);

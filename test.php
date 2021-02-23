@@ -7,38 +7,53 @@ $loop = \React\EventLoop\Factory::create();
 
 $deferred = new \React\Promise\Deferred();
 
+$never = new \React\Promise\Deferred(function () {
+    echo "never canncller get called\r\n";
+    // throw new \Exception('never is canncelled');
+});
+
 function child() {
     try {
         $result = yield grandson();
     } catch (Throwable $e) {
-        echo 'c: ' . $e;
+        throw $e;
     }
-    
     return $result;
 };
 
 function grandson()
 {
-    yield 3;    
+    yield 3;
+    throw new \Exception('grandson problem');
     return 'grandson-done';
 }
 
-$loop->futureTick(function () use ($deferred) {
-    \Sue\Coroutine\co(function ($promise) {
-        $group = [
+function fastresult()
+{
+    return 'fast';
+}
+
+
+$loop->futureTick(function () use ($deferred, $never) {    
+    \Sue\Coroutine\co(function ($promise, $never) {
+        $result = yield [
             child(),
-            child()
+            child(),
+            $promise,
+            fastresult(),
+            $never->promise()
         ];
-        $result = yield $group;
-        echo "done\r\n";
-    }, $deferred->promise())
-    ->otherwise(function ($error) {
-        echo $error;
-    });
+        foreach ($result as $value) {
+            echo $value . "\r\n";
+        }
+    }, $deferred->promise(), $never);
 });
 
-// $loop->addTimer(5, function () use ($deferred) {
-//     $deferred->resolve('okay');
+$loop->addTimer(3, function () use ($deferred) {
+    $deferred->reject(new \Exception('fail la'));
+});
+// $loop->addTimer(1, function () use ($never) {
+//     $never->resolve('never finished');
 // });
 $st = microtime(true);
 $loop->run();
