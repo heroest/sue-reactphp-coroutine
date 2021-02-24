@@ -158,7 +158,7 @@ final class CoroutineScheduler
         if ($coroutine->valid()) {
             $coroutine->cancel($reason);
         }
-        
+
         foreach ($coroutine->children() as $child) {
             $this->closeCoroutine($child);
         }
@@ -183,6 +183,7 @@ final class CoroutineScheduler
         $result = [];
         $todo_count = count($promises);
         foreach ($promises as $index => $promise) {
+            /** @var PromiseInterface $promise */
             $handler = function ($value) use ($index, $deferred, &$result, &$todo_count) {
                 $result[$index] = $value;
                 if (0 === --$todo_count) {

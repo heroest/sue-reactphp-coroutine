@@ -5,7 +5,7 @@ namespace Sue\Coroutine;
 use Throwable;
 use Generator;
 use SplObjectStorage;
-use Sue\Coroutine\{CoroutineException, CoroutineScheduler};
+use Sue\Coroutine\CoroutineScheduler;
 use React\Promise\{Deferred, PromiseInterface};
 
 class Coroutine

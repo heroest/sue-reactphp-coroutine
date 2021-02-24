@@ -1,7 +1,6 @@
 <?php
 
-namespace Sue\Coroutine
-{
+namespace Sue\Coroutine {
     function bindLoop(\React\EventLoop\LoopInterface $loop)
     {
         \Sue\Coroutine\CoroutineScheduler::getInstance()
@@ -16,8 +15,7 @@ namespace Sue\Coroutine
 }
 
 
-namespace Sue\Coroutine\SystemCall
-{
+namespace Sue\Coroutine\SystemCall {
     function sleep(float $seconds): AbstractSystemCall
     {
         return new CoroutineSleep($seconds);
@@ -33,4 +31,3 @@ namespace Sue\Coroutine\SystemCall
         return new CancelCoroutine();
     }
 }
-
