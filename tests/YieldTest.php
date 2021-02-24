@@ -25,7 +25,7 @@ final class YieldTest extends TestCase
             $yielded = yield $promise;
         }, resolve($word));
         self::$loop->run();
-        $this->assertSame($yielded, $word);
+        $this->assertEquals($yielded, $word);
     }
 
     public function testValue()
@@ -36,7 +36,7 @@ final class YieldTest extends TestCase
             $yielded = yield $input;
         }, $word);
         self::$loop->run();
-        $this->assertSame($yielded, $word);
+        $this->assertEquals($yielded, $word);
     }
 
     public function testGenerator()
@@ -49,7 +49,7 @@ final class YieldTest extends TestCase
             $yielded = yield $child();
         });
         self::$loop->run();
-        $this->assertSame($yielded, null);
+        $this->assertEquals($yielded, null);
     }
 
     public function testGeneratorWithReturn()
@@ -63,7 +63,7 @@ final class YieldTest extends TestCase
             $yielded = yield $child();
         });
         self::$loop->run();
-        $this->assertSame($yielded, 'bar');
+        $this->assertEquals($yielded, 'bar');
     }
 
     public function testNestedGenerator()
@@ -82,6 +82,6 @@ final class YieldTest extends TestCase
             $yielded = yield $l1();
         });
         self::$loop->run();
-        $this->assertSame($yielded, 'bar');
+        $this->assertEquals($yielded, 'bar');
     }
 }
