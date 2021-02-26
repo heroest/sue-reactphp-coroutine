@@ -3,11 +3,13 @@
 namespace Sue\Coroutine;
 
 use Throwable;
-use SplObjectStorage;
 use Generator;
+use SplObjectStorage;
+use SplFixedArray;
+use ErrorException;
 use Sue\Coroutine\{CoroutineException, State, SystemCall\AbstractSystemCall};
 use React\EventLoop\LoopInterface;
-use React\Promise\{Deferred, PromiseInterface, CancellablePromiseInterface, CancellationQueue};
+use React\Promise\{Deferred, PromiseInterface, CancellationQueue};
 use function React\Promise\{resolve, reject};
 
 final class CoroutineScheduler
@@ -73,8 +75,12 @@ final class CoroutineScheduler
     }
 
     public function execute(callable $callable, ...$params): PromiseInterface
-    {
+    {        
         try {
+            set_error_handler(function ($error_no, $error_str, $error_file, $error_line) {
+                throw new ErrorException($error_str, $error_no, E_USER_ERROR, $error_file, $error_line);
+            });
+            
             if (null === $this->loop) {
                 throw new CoroutineException("Eventloop is not registered, maybe forget to call \Sue\Coroutine\bindLoop() before execute?");
             }
@@ -90,12 +96,14 @@ final class CoroutineScheduler
             }
         } catch (Throwable $e) {
             return reject($e);
+        } finally {
+            restore_error_handler();
         }
     }
 
-    public function cancelCoroutine(Coroutine $coroutine)
+    public function cancelCoroutine(Coroutine $coroutine, string $message)
     {
-        $this->closeCoroutine($coroutine, new CoroutineException('Coroutine is canncelled'));
+        $this->closeCoroutine($coroutine, new CoroutineException($message));
     }
 
     private function handleYielded(Coroutine $coroutine, $value)
@@ -153,10 +161,10 @@ final class CoroutineScheduler
         return (new Coroutine())->start($generator);
     }
 
-    private function closeCoroutine(Coroutine $coroutine, Throwable $reason = null)
+    private function closeCoroutine(Coroutine $coroutine, Throwable $exception = null)
     {
         if ($coroutine->valid()) {
-            $coroutine->cancel($reason);
+            $coroutine->cancel($exception);
         }
 
         foreach ($coroutine->children() as $child) {
@@ -180,14 +188,14 @@ final class CoroutineScheduler
         $canceller = new CancellationQueue();
         $deferred = new Deferred($canceller);
 
-        $result = [];
         $todo_count = count($promises);
+        $result = new SplFixedArray($todo_count);
         foreach ($promises as $index => $promise) {
             /** @var PromiseInterface $promise */
-            $handler = function ($value) use ($index, $deferred, &$result, &$todo_count) {
+            $handler = function ($value) use ($index, $deferred, $result, &$todo_count) {
                 $result[$index] = $value;
                 if (0 === --$todo_count) {
-                    $deferred->resolve($result);
+                    $deferred->resolve($result->toArray());
                 }
             };
             $promise->then($handler, $handler);

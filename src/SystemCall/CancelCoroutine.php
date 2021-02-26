@@ -8,6 +8,7 @@ class CancelCoroutine extends AbstractSystemCall
 {
     public function execute(Coroutine $coroutine)
     {
-        CoroutineScheduler::getInstance()->cancelCoroutine($coroutine);
+        CoroutineScheduler::getInstance()
+            ->cancelCoroutine($coroutine, 'Coroutine is canncelled by systemcall');
     }
 }

@@ -39,7 +39,7 @@ class Coroutine
         $this->state = state::WORKING;
         $this->deferred = new Deferred(function () {
             CoroutineScheduler::getInstance()
-                ->cancelCoroutine($this);
+                ->cancelCoroutine($this, 'Coroutine is canncelled by promise canncel');
         });
         $this->generator = $generator;
         $this->timeExpired = 0;
@@ -124,9 +124,11 @@ class Coroutine
         });
     }
 
-    public function cancel(Throwable $reason = null)
+    public function cancel(Throwable $exception = null)
     {
-        if ($reason) $this->settle($reason);
+        if (null !== $exception) {
+            $this->settle($exception);
+        }
 
         if ($this->progress) {
             $this->progress->cancel();

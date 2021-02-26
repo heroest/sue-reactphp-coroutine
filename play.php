@@ -2,13 +2,8 @@
 
 include 'vendor/autoload.php';
 
-$d1 = new \React\Promise\Deferred(function () {
-    echo "d1 canceller called\r\n";
+set_error_handler(function ($error_no, $error_str, $error_file, $error_line) {
+    throw new ErrorException($error_str, $error_no, E_USER_ERROR, $error_file, $error_line);
 });
 
-$d2 = new \React\Promise\Deferred(function () {
-    echo "d2 cannel called\r\n";
-});
-
-$d2->resolve($d1->promise());
-$d2->promise()->cancel();
+$a = 1/0;

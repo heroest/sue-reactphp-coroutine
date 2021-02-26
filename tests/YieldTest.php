@@ -32,11 +32,39 @@ final class YieldTest extends TestCase
     {
         $yielded = null;
         $word = 'foo';
-        co(function ($input) use (&$yielded) {
-            $yielded = yield $input;
+        co(function ($input_word) use (&$yielded) {
+            $yielded = yield $input_word;
         }, $word);
         self::$loop->run();
         $this->assertEquals($yielded, $word);
+    }
+
+    public function testThorwable()
+    {
+        $yielded = false;
+        $reject = false;
+        $exception = new \Exception('foo');
+        co(function () use (&$yielded, $exception) {
+            $yielded = yield $exception;
+        })->then(null, function ($error) use (&$reject) {
+            $reject = $error;
+        });
+        self::$loop->run();
+        $this->assertEquals($yielded, null);
+        $this->assertEquals($reject, $exception);
+    }
+
+    public function testError()
+    {
+        $yielded = false;
+        $reject = false;
+        co(function () use (&$yielded) {
+            $yielded = yield 1/0;
+        })->then(null, function ($error) use (&$reject) {
+            $reject = $error;
+        });
+        self::$loop->run();
+        $this->assertEquals($yielded, null);
     }
 
     public function testGenerator()
@@ -64,16 +92,17 @@ final class YieldTest extends TestCase
         });
         self::$loop->run();
         $this->assertEquals($yielded, 'bar');
+        $this->assertNotEquals($yielded, 'foo');
     }
 
     public function testNestedGenerator()
     {
         $l2 = function () {
-            yield;
-            return 'bar';
+            $result = yield 'bar';
+            return $result;
         };
         $l1 = function () use ($l2) {
-            yield;
+            yield 'foo';
             return yield $l2();
         };
         
@@ -83,5 +112,48 @@ final class YieldTest extends TestCase
         });
         self::$loop->run();
         $this->assertEquals($yielded, 'bar');
+        $this->assertNotEquals($yielded, 'foo');
+    }
+
+    public function testYieldPromiseArray()
+    {
+        $yielded = false;
+        co(function () use (&$yielded) {
+            $yielded = yield [
+                \React\Promise\resolve('foo'),
+                \React\Promise\resolve('bar')
+            ];
+        });
+        self::$loop->run();
+        $this->assertEquals($yielded, ['foo', 'bar']);
+        $this->assertNotEquals($yielded, ['bar', 'foo']); //reverse
+    }
+
+    public function testYieldGeneratorArray()
+    {
+        $yielded = false;
+        co(function () use (&$yielded) {
+            $yielded = yield [
+                (function () {$result = yield 'foo'; return $result;})(),
+                (function () {$result = yield 'bar'; return $result;})(),
+            ];
+        });
+        self::$loop->run();
+        $this->assertEquals($yielded, ['foo', 'bar']);
+    }
+
+    public function testYieldMixedArray()
+    {
+        $yielded = false;
+        $exception = new \Exception('some-error');
+        co(function () use (&$yielded, $exception) {
+            $yielded = yield [
+                (function () {$result = yield 'foo'; return $result;})(),
+                \React\Promise\resolve('bar'),
+                \React\Promise\reject($exception)
+            ];
+        });
+        self::$loop->run();
+        $this->assertEquals($yielded, ['foo', 'bar', $exception]);
     }
 }

@@ -36,28 +36,19 @@ function fastresult()
 $loop->futureTick(function () use ($deferred, $never) {    
     \Sue\Coroutine\co(function ($promise, $never) {
         // yield \Sue\Coroutine\SystemCall\timeout(0.1);
-        $result = yield [
-            child(),
-            child(),
-            $promise,
-            fastresult(),
-            $never->promise()
-        ];
-        foreach ($result as $value) {
-            echo $value . "\r\n";
-        }
+        yield 1/0;
     }, $deferred->promise(), $never)
     ->otherwise(function ($error) {
         echo $error;
     });
 });
 
-$loop->addTimer(3, function () use ($deferred) {
-    $deferred->reject(new \Exception('fail la'));
-});
-$loop->addTimer(1, function () use ($never) {
-    $never->resolve('never finished');
-});
+// $loop->addTimer(3, function () use ($deferred) {
+//     $deferred->reject(new \Exception('fail la'));
+// });
+// $loop->addTimer(1, function () use ($never) {
+//     $never->resolve('never finished');
+// });
 $st = microtime(true);
 $loop->run();
 echo 'time-used: ' . bcsub(microtime(true), $st, 4);
