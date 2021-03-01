@@ -20,6 +20,7 @@ final class CoroutineScheduler
     private $loop;
     /** @var \React\EventLoop\TimerInterface */
     private $tickTimer;
+    private $oldErrorHandler;
 
     private function __construct()
     {
@@ -54,6 +55,7 @@ final class CoroutineScheduler
         }
 
         $this->coroutineWorking->rewind();
+        $this->setErrorHandler();
         while ($count--) {
             /** @var \Sue\Coroutine\Coroutine $coroutine */
             if (null === $coroutine = $this->coroutineWorking->current()) {
@@ -68,23 +70,24 @@ final class CoroutineScheduler
             } elseif ($coroutine->inState(State::PROGRESS)) {
                 continue;
             } else {
-                $yielded = $coroutine->get();
-                $this->handleYielded($coroutine, $yielded);
+                try {
+                    $yielded = $coroutine->get();
+                    $this->handleYielded($coroutine, $yielded);
+                } catch (Throwable $e) {
+                    $this->closeCoroutine($coroutine, $e);
+                }
             }
         }
+        $this->restoreErrorHandler();
     }
 
     public function execute(callable $callable, ...$params): PromiseInterface
     {        
         try {
-            set_error_handler(function ($error_no, $error_str, $error_file, $error_line) {
-                throw new ErrorException($error_str, $error_no, E_USER_ERROR, $error_file, $error_line);
-            });
-            
             if (null === $this->loop) {
                 throw new CoroutineException("Eventloop is not registered, maybe forget to call \Sue\Coroutine\bindLoop() before execute?");
             }
-
+            $this->setErrorHandler();
             $result = call_user_func_array($callable, $params);
             if ($result instanceof Generator) {
                 $coroutine = $this->createCoroutine($result);
@@ -97,7 +100,7 @@ final class CoroutineScheduler
         } catch (Throwable $e) {
             return reject($e);
         } finally {
-            restore_error_handler();
+            $this->restoreErrorHandler();
         }
     }
 
@@ -163,14 +166,10 @@ final class CoroutineScheduler
 
     private function closeCoroutine(Coroutine $coroutine, Throwable $exception = null)
     {
-        if ($coroutine->valid()) {
-            $coroutine->cancel($exception);
-        }
-
+        $coroutine->cancel($exception);
         foreach ($coroutine->children() as $child) {
             $this->closeCoroutine($child);
         }
-
         $this->coroutineWorking->detach($coroutine);
     }
 
@@ -202,5 +201,20 @@ final class CoroutineScheduler
             $canceller->enqueue($promise);
         }
         return $deferred->promise();
+    }
+
+    private function setErrorHandler()
+    {
+        $this->oldErrorHandler = set_error_handler(function ($error_no, $error_str, $error_file, $error_line) {
+            throw new ErrorException($error_str, $error_no, E_USER_ERROR, $error_file, $error_line);
+        });
+    }
+
+    private function restoreErrorHandler()
+    {
+        if (null !== $this->oldErrorHandler) {
+            restore_error_handler();
+            $this->oldErrorHandler = null;
+        }
     }
 }

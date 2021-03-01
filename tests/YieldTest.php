@@ -25,7 +25,7 @@ final class YieldTest extends TestCase
             $yielded = yield $promise;
         }, resolve($word));
         self::$loop->run();
-        $this->assertEquals($yielded, $word);
+        $this->assertEquals($word, $yielded);
     }
 
     public function testValue()
@@ -36,7 +36,7 @@ final class YieldTest extends TestCase
             $yielded = yield $input_word;
         }, $word);
         self::$loop->run();
-        $this->assertEquals($yielded, $word);
+        $this->assertEquals($word, $yielded);
     }
 
     public function testThorwable()
@@ -51,7 +51,7 @@ final class YieldTest extends TestCase
         });
         self::$loop->run();
         $this->assertEquals($yielded, null);
-        $this->assertEquals($reject, $exception);
+        $this->assertEquals($exception, $reject);
     }
 
     public function testError()
@@ -59,12 +59,14 @@ final class YieldTest extends TestCase
         $yielded = false;
         $reject = false;
         co(function () use (&$yielded) {
-            $yielded = yield 1/0;
+            $value = 1/0;
+            $yielded = yield $value;
         })->then(null, function ($error) use (&$reject) {
             $reject = $error;
         });
         self::$loop->run();
-        $this->assertEquals($yielded, null);
+        $this->assertEquals(null, $yielded);
+        $this->assertEquals(new \ErrorException('Division by zero', 2, E_USER_ERROR), $reject);
     }
 
     public function testGenerator()
