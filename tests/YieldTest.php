@@ -5,7 +5,7 @@ namespace Sue\Tests\Coroutine;
 use PHPUnit\Framework\TestCase;
 use React\EventLoop\{LoopInterface, Factory};
 use function React\Promise\resolve;
-use function Sue\Coroutine\{bindLoop, co};
+use function Sue\Coroutine\{bootstrap, co};
 
 final class YieldTest extends TestCase
 {
@@ -14,7 +14,7 @@ final class YieldTest extends TestCase
 
     public static function setUpBeforeClass(): void
     {
-        bindLoop(self::$loop = Factory::create());
+        bootstrap(self::$loop = Factory::create());
     }
 
     public function testPromise()
