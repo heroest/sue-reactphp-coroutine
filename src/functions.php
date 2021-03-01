@@ -1,7 +1,7 @@
 <?php
 
 namespace Sue\Coroutine {
-    function bindLoop(\React\EventLoop\LoopInterface $loop): void
+    function bootstrap(\React\EventLoop\LoopInterface $loop): void
     {
         \Sue\Coroutine\CoroutineScheduler::getInstance()
             ->registerLoop($loop);
@@ -49,8 +49,8 @@ namespace Sue\Coroutine\SystemCall {
         return new CoroutineTimout($timeout_seconds);
     }
 
-    function cancel()
+    function cancel(string $reason)
     {
-        return new CancelCoroutine();
+        return new CancelCoroutine($reason);
     }
 }
