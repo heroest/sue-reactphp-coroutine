@@ -49,7 +49,7 @@ namespace Sue\Coroutine\SystemCall {
         return new CoroutineTimout($timeout_seconds);
     }
 
-    function cancel(string $reason)
+    function cancel(string $reason): AbstractSystemCall
     {
         return new CancelCoroutine($reason);
     }
