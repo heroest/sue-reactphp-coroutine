@@ -2,21 +2,12 @@
 
 namespace Sue\Tests\Coroutine;
 
-use PHPUnit\Framework\TestCase;
-use React\EventLoop\{LoopInterface, Factory};
+use Sue\Tests\Coroutine\BaseTestCase;
 use function React\Promise\resolve;
-use function Sue\Coroutine\{bootstrap, co};
+use function Sue\Coroutine\co;
 
-final class YieldTest extends TestCase
+final class YieldTest extends BaseTestCase
 {
-    /** @var LoopInterface $loop */
-    private static $loop;
-
-    public static function setUpBeforeClass(): void
-    {
-        bootstrap(self::$loop = Factory::create());
-    }
-
     public function testPromise()
     {
         $yielded = null;
@@ -74,7 +65,7 @@ final class YieldTest extends TestCase
         $yielded = false;
         $reject = false;
         co(function () use (&$yielded) {
-            $yielded = yield 1/0;
+            $yielded = yield 1 / 0;
         })->then(null, function ($error) use (&$reject) {
             $reject = $error;
         });
@@ -121,7 +112,7 @@ final class YieldTest extends TestCase
             yield 'foo';
             return yield $l2();
         };
-        
+
         $yielded = false;
         co(function () use (&$yielded, $l1) {
             $yielded = yield $l1();
@@ -150,8 +141,14 @@ final class YieldTest extends TestCase
         $yielded = false;
         co(function () use (&$yielded) {
             $yielded = yield [
-                (function () {$result = yield 'foo'; return $result;})(),
-                (function () {$result = yield 'bar'; return $result;})(),
+                (function () {
+                    $result = yield 'foo';
+                    return $result;
+                })(),
+                (function () {
+                    $result = yield 'bar';
+                    return $result;
+                })(),
             ];
         });
         self::$loop->run();
@@ -164,7 +161,9 @@ final class YieldTest extends TestCase
         $exception = new \Exception('some-error');
         co(function () use (&$yielded, $exception) {
             $yielded = yield [
-                (function () {return yield 'foo';})(),
+                (function () {
+                    return yield 'foo';
+                })(),
                 \React\Promise\resolve('bar'),
                 \React\Promise\reject($exception)
             ];

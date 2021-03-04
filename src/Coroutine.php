@@ -38,7 +38,7 @@ class Coroutine
         $this->state = state::WORKING;
         $this->deferred = new Deferred(function () {
             CoroutineScheduler::getInstance()
-                ->cancelCoroutine($this, 'Coroutine is canncelled by promise canncel');
+                ->cancelCoroutine($this, 'Coroutine is canncelled by promise cancel');
         });
         $this->generator = $generator;
         $this->children = new SplObjectStorage();
@@ -131,11 +131,7 @@ class Coroutine
         }
 
         if ($this->progress) {
-            if (($this->progress instanceof CancellablePromiseInterface)
-                or method_exists($this->progress, 'cancel')
-            ) {
-                $this->progress->cancel();
-            }
+            $this->progress->cancel();
             $this->progress = null;
         }
     }
