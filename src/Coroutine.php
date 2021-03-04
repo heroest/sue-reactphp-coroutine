@@ -6,7 +6,7 @@ use Throwable;
 use Generator;
 use SplObjectStorage;
 use Sue\Coroutine\CoroutineScheduler;
-use React\Promise\{Deferred, PromiseInterface};
+use React\Promise\{Deferred, PromiseInterface, CancellablePromiseInterface};
 
 class Coroutine
 {
@@ -18,7 +18,7 @@ class Coroutine
     /** @var bool $isDone */
     private $isDone = false;
     private $state;
-    /** @var \React\Promise\CancellablePromiseInterface $progress */
+    /** @var CancellablePromiseInterface $progress */
     private $progress;
     private $children;
     private $timeExpired = 0;
@@ -26,7 +26,6 @@ class Coroutine
     public function __construct()
     {
         $this->id = md5(spl_object_hash($this));
-        $this->children = new SplObjectStorage();
     }
 
     public function getId(): string
@@ -39,9 +38,10 @@ class Coroutine
         $this->state = state::WORKING;
         $this->deferred = new Deferred(function () {
             CoroutineScheduler::getInstance()
-                ->cancelCoroutine($this, 'Coroutine is canncelled by promise canncel');
+                ->cancelCoroutine($this, 'Coroutine is canncelled by promise cancel');
         });
         $this->generator = $generator;
+        $this->children = new SplObjectStorage();
         $this->timeExpired = 0;
         $this->isDone = false;
         return $this;

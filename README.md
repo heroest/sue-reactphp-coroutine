@@ -9,21 +9,20 @@ Coroutine-framework-for-ReactPHP
 **Table of Contents**
 * [Quickstart example](#quickstart-example)
 * [Methods](#methods)
-  * [LoopInterface](#loopinterface)
-  * [LoopInterface](#loopinterface)
+  * [\Sue\Coroutine\bootstrap](#\Sue\Coroutine\bootstrap)
+  * [\Sue\Coroutine\co](#\Sue\Coroutine\co)
 * [Install](#install)
 * [Tests](#tests)
 * [License](#license)
-* [More](#more)
 
 ## quickstart-example
 
 ```php
 
-$loop = React\EventLoop\Factory::create();
-$deferred = new Deferred();
+$loop = \React\EventLoop\Factory::create();
+$deferred = new \React\Promise\Deferred();
 $loop->addTimer(3, function () use ($deferred) {
-    $deferred->resolve('job done');
+    $deferred->resolve('foo');
 })
 
 //1. Use React Promise
@@ -32,7 +31,7 @@ $deferred->promise()->then(function ($value) {
 });
 
 //2. use coroutine function co()
-\Sue\Coroutine\bindLoop($loop);
+\Sue\Coroutine\bootstrap($loop);
 \Sue\Coroutine\co(function ($promise) {
     echo "start waiting promise to be resolved\r\n";
     $value = yield $promise
@@ -42,3 +41,50 @@ $deferred->promise()->then(function ($value) {
 $loop->run();
 
 ```
+
+## methods
+
+## \Sue\Coroutine\bootstrap
+Before start with executing code in coroutine, you need to attach coroutine scheduler to EventLoop:
+```php
+$loop = \React\EventLoop\Factory::create();
+\Sue\Coroutine\bootstrap($loop);
+```
+
+## \Sue\Coroutine\co
+```co()``` is used to execute a callable as coroutine. you can start a coroutine like example below:
+```php
+$loop = \React\EventLoop\Factory::create();
+\Sue\Coroutine\bootstrap($loop);
+$callable = function ($worker_id) {
+    $count = 3;
+    while ($count--) {
+        echo "{$worker_id}: " . yield $count . "\r\n";
+    }
+};
+\Sue\Coroutine\co($callable, 'foo');
+\Sue\Coroutine\co($callable, 'bar');
+$loop->run();
+/** expect out:
+ foo: 2
+ bar: 2
+ foo: 1
+ bar: 1
+ foo: 0
+ bar: 0
+**/
+```
+
+## Install
+
+
+## Tests
+You need to clone this project from [git](https://github.com/heroest/sue-reactphp-coroutine) and then use composer to install all the dependencies
+```bash
+$ composer install
+$ vendor/bin/phpunit
+```
+
+## License
+
+MIT, see [LICENSE file](LICENSE).

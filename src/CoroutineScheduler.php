@@ -185,7 +185,10 @@ final class CoroutineScheduler
     private function await(array $promises): PromiseInterface
     {
         $canceller = new CancellationQueue();
-        $deferred = new Deferred($canceller);
+        $deferred = new Deferred(function () use ($canceller) {
+            $canceller();
+            throw new CoroutineException("Awaitable promises have been cancelled");
+        });
 
         $todo_count = count($promises);
         $result = new SplFixedArray($todo_count);
