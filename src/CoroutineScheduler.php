@@ -20,7 +20,6 @@ final class CoroutineScheduler
     private $loop;
     /** @var \React\EventLoop\TimerInterface */
     private $tickTimer;
-    private $oldErrorHandler;
 
     private function __construct()
     {
@@ -208,16 +207,13 @@ final class CoroutineScheduler
 
     private function setErrorHandler()
     {
-        $this->oldErrorHandler = set_error_handler(function ($error_no, $error_str, $error_file, $error_line) {
+        set_error_handler(function ($error_no, $error_str, $error_file, $error_line) {
             throw new ErrorException($error_str, $error_no, E_USER_ERROR, $error_file, $error_line);
         });
     }
 
     private function restoreErrorHandler()
     {
-        if (null !== $this->oldErrorHandler) {
-            restore_error_handler();
-            $this->oldErrorHandler = null;
-        }
+        restore_error_handler();
     }
 }
