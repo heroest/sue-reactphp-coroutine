@@ -40,6 +40,17 @@ final class CoroutineScheduler
         return $this;
     }
 
+    public function unregisterLoop(): self
+    {
+        if (null === $this->loop) {
+            return $this;
+        } elseif ($this->coroutineWorking->count()) {
+            throw new CoroutineException("There is still coroutine running");
+        } else {
+            $this->loop = null;
+        }
+    }
+
     public function getLoop(): LoopInterface
     {
         return $this->loop;
@@ -84,7 +95,7 @@ final class CoroutineScheduler
     {        
         try {
             if (null === $this->loop) {
-                throw new CoroutineException("Eventloop is not registered, maybe forget to call \Sue\Coroutine\bindLoop() before execute?");
+                throw new CoroutineException("Eventloop is not registered, maybe forget to call \Sue\Coroutine\bootstrap() before execute?");
             }
             $this->setErrorHandler();
             $result = call_user_func_array($callable, $params);
@@ -125,17 +136,17 @@ final class CoroutineScheduler
 
     private function handlePromise(Coroutine $coroutine, PromiseInterface $promise)
     {
+        /** @var \React\Promise\ExtendedPromiseInterface $promise*/
         $coroutine->appendProgress($promise);
         $closure = function ($value) use ($coroutine) {
             $coroutine->set($value);
         };
-        $promise->then($closure, $closure);
+        $promise->done($closure, $closure);
     }
 
     private function handleGenerator(Coroutine $parent, Generator $generator)
     {
         $child = $this->createCoroutine($generator);
-        $parent->appendChild($child);
         $this->handlePromise($parent, $child->promise());
         $this->coroutineWorking->attach($child);
     }
@@ -148,7 +159,6 @@ final class CoroutineScheduler
                 $promises[] = $item;
             } elseif ($item instanceof Generator) {
                 $child = $this->createCoroutine($item);
-                $parent->appendChild($child);
                 $this->coroutineWorking->attach($child);
                 $promises[] = $child->promise();
             } else {
@@ -166,9 +176,6 @@ final class CoroutineScheduler
     private function closeCoroutine(Coroutine $coroutine, Throwable $exception = null)
     {
         $coroutine->cancel($exception);
-        foreach ($coroutine->children() as $child) {
-            $this->closeCoroutine($child);
-        }
         $this->coroutineWorking->detach($coroutine);
     }
 
@@ -192,14 +199,14 @@ final class CoroutineScheduler
         $todo_count = count($promises);
         $result = new SplFixedArray($todo_count);
         foreach ($promises as $index => $promise) {
-            /** @var PromiseInterface $promise */
+            /** @var \React\Promise\ExtendedPromiseInterface $promise*/
             $handler = function ($value) use ($index, $deferred, $result, &$todo_count) {
                 $result[$index] = $value;
                 if (0 === --$todo_count) {
                     $deferred->resolve($result->toArray());
                 }
             };
-            $promise->then($handler, $handler);
+            $promise->done($handler, $handler);
             $canceller->enqueue($promise);
         }
         return $deferred->promise();

@@ -20,7 +20,6 @@ class Coroutine
     private $state;
     /** @var CancellablePromiseInterface $progress */
     private $progress;
-    private $children;
     private $timeExpired = 0;
 
     public function __construct()
@@ -57,11 +56,6 @@ class Coroutine
         return $this->state === $state;
     }
 
-    public function isDone(): bool
-    {
-        return $this->isDone;
-    }
-
     public function isTimeout(): bool
     {
         return $this->timeExpired and microtime(true) > $this->timeExpired;
@@ -72,21 +66,21 @@ class Coroutine
         $this->timeExpired = (float) bcadd(microtime(true), $timeout, 4);
     }
 
-    public function children(): array
-    {
-        return iterator_to_array($this->children, false);
-    }
+    // public function children(): array
+    // {
+    //     return iterator_to_array($this->children, false);
+    // }
 
-    public function appendChild(Coroutine $child): self
-    {
-        $this->children->attach($child);
-        /** @var \React\Promise\ExtendedPromiseInterface $promise */
-        $promise = $child->promise();
-        $promise->always(function () use ($child) {
-            $this->children->detach($child);
-        });
-        return $this;
-    }
+    // public function appendChild(Coroutine $child): self
+    // {
+    //     $this->children->attach($child);
+    //     /** @var \React\Promise\ExtendedPromiseInterface $promise */
+    //     $promise = $child->promise();
+    //     $promise->always(function () use ($child) {
+    //         $this->children->detach($child);
+    //     });
+    //     return $this;
+    // }
 
     public function get()
     {
@@ -120,7 +114,9 @@ class Coroutine
         /** @var \React\Promise\ExtendedPromiseInterface $promise */
         $promise->always(function () {
             $this->progress = null;
-            $this->state = State::WORKING;
+            if ($this->inState(State::PROGRESS)) {
+                $this->state = State::WORKING;
+            }
         });
     }
 
@@ -138,14 +134,13 @@ class Coroutine
 
     public function valid(): bool
     {
-        return false === $this->isDone
+        return State::DONE !== $this->state
             and null !== $this->generator
             and $this->generator->valid();
     }
 
     public function settle($value)
     {
-        $this->isDone = true;
         $this->state = State::DONE;
         ($value instanceof Throwable)
             ? $this->deferred->reject($value)
