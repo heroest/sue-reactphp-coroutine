@@ -46,7 +46,7 @@ namespace Sue\Coroutine\SystemCall {
 
     function timeout(float $timeout_seconds): AbstractSystemCall
     {
-        return new CoroutineTimout($timeout_seconds);
+        return new CoroutineTimeout($timeout_seconds);
     }
 
     function cancel(string $reason = ''): AbstractSystemCall
