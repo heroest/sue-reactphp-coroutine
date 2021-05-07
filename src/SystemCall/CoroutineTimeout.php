@@ -4,7 +4,7 @@ namespace Sue\Coroutine\SystemCall;
 
 use Sue\Coroutine\Coroutine;
 
-class CoroutineTimout extends AbstractSystemCall
+class CoroutineTimeout extends AbstractSystemCall
 {
     private $seconds;
 
